@@ -1,0 +1,36 @@
+# Compiled class file
+*.class
+
+# Idea files
+*.idea
+*.iml
+out/
+
+.metadata
+bin/*
+tmp/
+*.tmp
+*.bak
+*.swp
+*~.nib
+local.properties
+.settings/
+.loadpath
+.recommenders
+
+# External tool builders
+.externalToolBuilders/
+
+# Locally stored "Eclipse launch configurations"
+*.launch
+
+# Java annotation processor (APT)
+.factorypath
+
+# Code Recommenders
+.recommenders/
+
+#Eclipse project
+.settings/*
+.project
+.classpath

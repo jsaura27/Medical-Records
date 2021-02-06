@@ -1,0 +1,55 @@
+#!/bin/sh
+#
+# Copyright (C) 2017 by Pablo Correa Gomez
+#
+#    This program is free software; you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation; either version 3 of the License, or
+#    (at your option) any later version.
+#
+#    This program is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+#    ( http://www.fsf.org/licenses/gpl.txt )
+#####################################################################
+
+#DIR=/Users/oscarodestal/Skola/datasakerhet/digital_certificates/certFiles
+DIR=/home/pablo/data/Informatica/medicalRecords/certFiles
+LANG="-J-Duser.language=en" #Needed to fix a bug with Spanish and Swedish translations
+ST_PASSWD="-storepass password"
+KEY_PASSWD="-keypass password"
+ROOT_CA=rootCA.pem
+ROOT_CA_KEY=rootCAkey.pem
+
+#This script should receive a CN for a client and create and sign the key and truststores needed for the service to work
+
+CLIENT_CN=$1
+CLIENT_KEYSTORE="${1}_keystore"
+CLIENT_TRUSTSTORE="${1}_truststore"
+CLIENT_ALIAS="${1}_cert"
+CLIENT_CSR="${1}_CSR.pem"
+CLIENT_SIGNED_CERT="${1}CertSigned"
+
+echo "Generating ${CLIENT_CN} keypair
+"
+keytool $LANG -genkeypair -alias $CLIENT_ALIAS -keyalg rsa -keysize 4096  -dname \
+	CN="$CLIENT_CN" $KEY_PASSWD -keystore ${DIR}/$CLIENT_KEYSTORE -storetype pkcs12 $ST_PASSWD
+
+echo "Generating ${CLIENT_CN} cert sign request
+"
+keytool $LANG -certreq  -alias $CLIENT_ALIAS -keyalg rsa -keysize 4096 -file ${DIR}/$CLIENT_CSR -keystore ${DIR}/$CLIENT_KEYSTORE -storetype pkcs12 $ST_PASSWD
+
+echo "Signing ${CLIENT_CN} cert sign request
+"
+openssl x509 -req -in ${DIR}/$CLIENT_CSR -out ${DIR}/$CLIENT_SIGNED_CERT -CA ${DIR}/$ROOT_CA -CAkey ${DIR}/$ROOT_CA_KEY -CAcreateserial    
+
+echo "Importing ${CLIENT_CN} certs to keystore"
+keytool $LANG -importcert -alias CA_cert -file ${DIR}/$ROOT_CA -trustcacerts -keystore  ${DIR}/$CLIENT_KEYSTORE -storetype pkcs12 $ST_PASSWD
+keytool $LANG -importcert -alias $CLIENT_ALIAS -file ${DIR}/$CLIENT_SIGNED_CERT -keystore  ${DIR}/$CLIENT_KEYSTORE -storetype pkcs12 $ST_PASSWD
+
+echo "Creating ${CLIENT_CN} truststore"
+keytool $LANG  -importcert -alias rootCA -file ${DIR}/$ROOT_CA $KEY_PASSWD -trustcacerts -storetype pkcs12 -keystore ${DIR}/$CLIENT_TRUSTSTORE $ST_PASSWD
+
+echo "Removing temporary files"
+rm ${DIR}/$CLIENT_CSR ${DIR}/$CLIENT_SIGNED_CERT

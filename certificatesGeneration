@@ -1,0 +1,66 @@
+#!/bin/sh
+#
+# Copyright (C) 2017 by Pablo Correa Gomez
+#
+#    This program is free software; you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation; either version 3 of the License, or
+#    (at your option) any later version.
+#
+#    This program is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+#    ( http://www.fsf.org/licenses/gpl.txt )
+#####################################################################
+
+#DIR=/Users/oscarodestal/Skola/datasakerhet/digital_certificates/certFiles
+DIR=/home/pablo/data/Informatica/medicalRecords/certFiles
+LANG="-J-Duser.language=en" #Needed to fix a bug with Spanish and Swedish translations
+ST_PASSWD="-storepass password"
+KEY_PASSWD="-keypass password"
+
+echo "Creating X.509 CA self signed. Still will be prompted to include CN
+"
+openssl req -x509 -newkey rsa:4096 -keyout ${DIR}/rootCAkey.pem -nodes -out ${DIR}/rootCA.pem
+
+echo "Creating keystore to host the CA, aka truststore
+"
+keytool $LANG  -importcert -alias rootCA -file ${DIR}/rootCA.pem $KEY_PASSWD -trustcacerts -storetype pkcs12 -keystore ${DIR}/clienttruststore $ST_PASSWD
+
+
+for machine in client.client server.server
+do
+    if [ $machine = client.client ]
+    then
+	KEYSTORE=clientkeystore
+	KEY_CN="Jaime Saura Bastida (940718T313) /\
+ Pablo Correa Gomez (960924T154) /\
+ Anna Palmqvist Sjovall (dat15asj) /\
+ Oscar Odestal (dat15ood) "
+    else
+	KEYSTORE=serverkeystore
+	KEY_CN=MyServer
+    fi
+
+    echo "Generating $machine keypair
+"
+    keytool $LANG -genkeypair -alias client_cert -keyalg rsa -keysize 4096  -dname \
+	    CN="$KEY_CN" $KEY_PASSWD -keystore ${DIR}/$KEYSTORE -storetype pkcs12 $ST_PASSWD
+
+    echo "Generating $machine cert sign request
+"
+    keytool $LANG -certreq  -alias client_cert -keyalg rsa -keysize 4096 -file ${DIR}/clientkeyCSR.pem -keystore ${DIR}/$KEYSTORE -storetype pkcs12 $ST_PASSWD
+    echo "Signing $machine cert sign request
+"
+    openssl x509 -req -in ${DIR}/clientkeyCSR.pem -out ${DIR}/clientCertSigned.pem -CA ${DIR}/rootCA.pem -CAkey ${DIR}/rootCAkey.pem -CAcreateserial
+    echo "Importing $machine certs to keystore
+"
+    keytool $LANG -importcert -alias CA_cert -file ${DIR}/rootCA.pem -trustcacerts -keystore  ${DIR}/$KEYSTORE -storetype pkcs12 $ST_PASSWD
+    keytool $LANG -importcert -alias client_cert -file ${DIR}/clientCertSigned.pem -keystore  ${DIR}/$KEYSTORE -storetype pkcs12 $ST_PASSWD
+
+done
+
+echo "Creating server.server truststore
+"
+keytool $LANG  -importcert -alias rootCA -file ${DIR}/rootCA.pem $KEY_PASSWD -trustcacerts -storetype pkcs12 -keystore ${DIR}/servertruststore $ST_PASSWD
